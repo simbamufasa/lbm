@@ -1,9 +1,3 @@
-# Local helper scripts
-git-push.sh
-pack-data.sh
-release-now.sh
-release-now.md
-
 # Environment files
 .env
 .env.*
@@ -31,3 +25,7 @@ dist/
 .idea/
 Thumbs.db
 .DS_Store
+
+# Release tooling, kept local
+github.sh
+RELEASE.md

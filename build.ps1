@@ -30,8 +30,8 @@ $msvcLib = "$($msvcBase.FullName)\lib\x64"
 
 Write-Host "[*] Visual Studio MSVC path: $vsPath"
 
-if (-not (Test-Path $ml64Exe)) { throw "Nie znaleziono ml64.exe" }
-if (-not (Test-Path $linkExe)) { throw "Nie znaleziono link.exe" }
+if (-not (Test-Path $ml64Exe)) { throw "ml64.exe not found" }
+if (-not (Test-Path $linkExe)) { throw "link.exe not found" }
 
 $rootDir = $PSScriptRoot
 $asmDir = Join-Path $rootDir "src"
@@ -41,11 +41,11 @@ if (-not (Test-Path $binDir)) {
     New-Item -ItemType Directory -Force -Path $binDir | Out-Null
 }
 
-# Pliki posrednie (.obj, .res) traifaja do tymczasowego katalogu w %TEMP%,
-# ktory jest kasowany po buildzie - w bin/ zostaje wylacznie lbm.exe
+# Intermediate files (.obj, .res) are written to a temporary directory under
+# %TEMP%, which is removed after the build, so bin/ holds only lbm.exe
 $tempDir = Join-Path $env:TEMP "lbm_build_$([System.Guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
-Write-Host "[*] Katalog tymczasowy: $tempDir"
+Write-Host "[*] Temporary directory: $tempDir"
 
 try {
     $rcFile = Join-Path $rootDir "res\resource.rc"
@@ -113,10 +113,10 @@ try {
     Write-Host "    Output: $exeFile"
 }
 finally {
-    # Sprzatanie plikow posrednich niezaleznie od wyniku builda
+    # Remove intermediate files regardless of the build result
     Set-Location $rootDir
     if (Test-Path $tempDir) {
-        Write-Host "[*] Czyszczenie plikow tymczasowych..."
+        Write-Host "[*] Cleaning up temporary files..."
         Remove-Item -Recurse -Force -Path $tempDir -ErrorAction SilentlyContinue
     }
 }

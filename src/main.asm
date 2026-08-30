@@ -66,8 +66,8 @@ str_cliStatusOff   db "[+] Threshold Status : DISABLED",0Dh,0Ah,0
 str_cliStartVal    db "[+] Start Threshold  : ",0
 str_cliStopVal     db "[+] Stop Threshold   : ",0
 str_cliSuccess     db "[+] Success! Battery thresholds updated successfully.",0Dh,0Ah,0
-str_cliFail        db "[-] Error! Administrator privileges required to change thresholds.",0Dh,0Ah,0
-str_cliReadFail    db "[-] No compatible Lenovo battery threshold configuration was found.",0Dh,0Ah,0
+str_cliFail        db "[-] Error! Failed to apply thresholds. Administrator privileges and Lenovo PM driver (IBMPmDrv) required.",0Dh,0Ah,0
+str_cliReadFail    db "[-] Error! No compatible Lenovo battery or PWRMGRV configuration found.",0Dh,0Ah,0
 str_cliInputFail   db "[-] Invalid thresholds. Use 0..100 and keep start lower than stop.",0Dh,0Ah,0
 str_newline        db 0Dh,0Ah,0
 

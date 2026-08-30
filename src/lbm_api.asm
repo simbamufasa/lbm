@@ -19,8 +19,14 @@ EXTRN DeviceIoControl:PROC
 EXTRN CloseHandle:PROC
 EXTRN SendMessageTimeoutW:PROC
 EXTRN DwmSetWindowAttribute:PROC
+EXTRN OpenSCManagerW:PROC
+EXTRN OpenServiceW:PROC
+EXTRN StartServiceW:PROC
+EXTRN ChangeServiceConfigW:PROC
+EXTRN CloseServiceHandle:PROC
 
 .const
+str_serviceName     dw 'I','B','M','P','M','D','R','V',0
 str_baseKeyPath     dw 'S','O','F','T','W','A','R','E','\','W','O','W','6','4','3','2','N','o','d','e','\'
                     dw 'L','e','n','o','v','o','\','P','W','R','M','G','R','V','\','C','o','n','f','K','e','y','s','\','D','a','t','a',0
 str_startPct        dw 'C','h','a','r','g','e','S','t','a','r','t','P','e','r','c','e','n','t','a','g','e',0
@@ -428,6 +434,73 @@ lbi_exit:
     ret
 Lbm_SendBatteryIoctl endp
 
+; ------------------------------------------------------------------------------
+; Lbm_EnsureDriverService
+; Starts the IBMPMDRV kernel driver on demand via SCM (even if in Manual or Disabled state).
+; ------------------------------------------------------------------------------
+Lbm_EnsureDriverService proc
+    push rbx
+    push rsi
+    sub rsp, 120
+
+    xor r8d, r8d                 ; NULL
+    xor edx, edx                 ; NULL
+    mov ecx, 1                   ; SC_MANAGER_CONNECT
+    call OpenSCManagerW
+    test rax, rax
+    jz eds_done
+    mov rbx, rax                 ; RBX = hSCM
+
+    mov r8d, 12h                 ; SERVICE_START | SERVICE_CHANGE_CONFIG
+    lea rdx, str_serviceName
+    mov rcx, rbx
+    call OpenServiceW
+    test rax, rax
+    jz eds_close_scm
+    mov rsi, rax                 ; RSI = hService
+
+    xor r8d, r8d
+    xor edx, edx
+    mov rcx, rsi
+    call StartServiceW
+    test eax, eax
+    jnz eds_close_svc
+
+    ; If starting failed (e.g. service was Disabled), enable it to DEMAND_START (3)
+    mov QWORD PTR [rsp+80], 0    ; lpDisplayName = NULL
+    mov QWORD PTR [rsp+72], 0    ; lpPassword = NULL
+    mov QWORD PTR [rsp+64], 0    ; lpServiceStartName = NULL
+    mov QWORD PTR [rsp+56], 0    ; lpDependencies = NULL
+    mov QWORD PTR [rsp+48], 0    ; lpdwTagId = NULL
+    mov QWORD PTR [rsp+40], 0    ; lpLoadOrderGroup = NULL
+    mov QWORD PTR [rsp+32], 0    ; lpBinaryPathName = NULL
+    mov r9d, 0FFFFFFFFh          ; dwErrorControl = SERVICE_NO_CHANGE
+    mov r8d, 3                   ; dwStartType = SERVICE_DEMAND_START
+    mov edx, 0FFFFFFFFh          ; dwServiceType = SERVICE_NO_CHANGE
+    mov rcx, rsi
+    call ChangeServiceConfigW
+
+    ; Retry StartServiceW
+    xor r8d, r8d
+    xor edx, edx
+    mov rcx, rsi
+    call StartServiceW
+
+eds_close_svc:
+    mov rcx, rsi
+    call CloseServiceHandle
+
+eds_close_scm:
+    mov rcx, rbx
+    call CloseServiceHandle
+
+eds_done:
+    add rsp, 120
+    pop rsi
+    pop rbx
+    ret
+Lbm_EnsureDriverService endp
+
 Lbm_NotifyDriver proc
     push rbx
     push rsi
@@ -449,9 +522,28 @@ Lbm_NotifyDriver proc
     call CreateFileW
 
     cmp rax, -1
+    jne nd_have_handle
+    test rax, rax
+    jnz nd_have_handle
+
+    ; Driver handle open failed -- try starting the service on-demand and retry
+    call Lbm_EnsureDriverService
+
+    mov QWORD PTR [rsp+48], 0
+    mov QWORD PTR [rsp+40], 0
+    mov QWORD PTR [rsp+32], OPEN_EXISTING
+    xor r9d, r9d
+    mov r8d, FILE_SHARE_READ
+    mov edx, GENERIC_READ
+    lea rcx, str_driverPath
+    call CreateFileW
+
+    cmp rax, -1
     je nd_fail
     test rax, rax
     jz nd_fail
+
+nd_have_handle:
     mov rbx, rax
 
     test r12d, r12d

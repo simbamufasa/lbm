@@ -19,13 +19,16 @@ LBM is a native x64 utility for configuring Lenovo battery charge thresholds on
 Windows. One executable provides two front ends over the same implementation:
 a command-line interface and a Win32 graphical interface.
 
-The current release binary is **20,480 bytes (20.00 KiB)**. It is written in
+The current release binary is **21,504 bytes (21.00 KiB)**. It is written in
 MASM x64, linked with `/NODEFAULTLIB`, and has no C runtime, .NET, Visual C++
 Redistributable, Lenovo user-mode DLL, or Lenovo Vantage dependency.
 
 LBM is not independent of the Lenovo kernel driver. Immediate threshold changes
 are sent to the device exposed by `IBMPmDrv`; the required Lenovo driver stack is
-documented under [Requirements](#requirements).
+documented under [Requirements](#requirements). The driver service does not have
+to be running beforehand. LBM starts it on demand through the Service Control
+Manager, so a stack left on `Manual`, stopped, or `Disabled` no longer blocks a
+threshold write.
 
 ## Download
 
@@ -130,6 +133,13 @@ path. This was verified by stopping that service, applying two threshold pairs,
 and reading both values back from the Lenovo driver before restarting the
 service.
 
+The `IBMPMDRV` service does not need to be set to `Automatic`. Earlier versions
+of LBM reached the driver only when the service already happened to be running,
+so a stack left on `Manual` or switched off produced a write failure. LBM now
+opens the service through the Service Control Manager and starts it itself,
+restoring `Demand Start` first when the service is `Disabled`. The installed
+driver package is required; its start type is not.
+
 Do not remove the Lenovo PM Device or Lenovo Power and Battery driver packages.
 Removing Vantage is different from removing the kernel interface used to reach
 the embedded controller.
@@ -144,7 +154,11 @@ the driver immediately. A threshold update follows this sequence:
    battery subkey containing `ChargeStartPercentage`.
 2. Write `ChargeStartPercentage`, `ChargeStopPercentage`,
    `ChargeStartControl`, and `ChargeStopControl`.
-3. Open `\\.\IBMPmDrv` with `CreateFileW`.
+3. Open `\\.\IBMPmDrv` with `CreateFileW`. When the handle cannot be opened,
+   start the `IBMPMDRV` service through `OpenSCManagerW`, `OpenServiceW`, and
+   `StartServiceW`, fall back to `ChangeServiceConfigW` with
+   `SERVICE_DEMAND_START` if the service is `Disabled`, and open the device
+   again.
 4. Select threshold or automatic mode with `DeviceIoControl`.
 5. In threshold mode, send the stop percentage followed by the start
    percentage.
@@ -186,7 +200,7 @@ reported by the `root\wmi` `BatteryStatus` class:
 | Source language | MASM x64 |
 | Entry point | `mainCRTStartup` |
 | PE subsystem | Windows GUI |
-| Current size | 20,480 bytes / 20.00 KiB |
+| Current size | 21,504 bytes / 21.00 KiB |
 | C runtime | None |
 | Default libraries | Disabled with `/NODEFAULTLIB` |
 | Lenovo user-mode DLLs | None |
@@ -204,9 +218,10 @@ COMCTL32.dll
 dwmapi.dll
 ```
 
-These imports implement process startup, registry access, the console adapter,
-the Win32 GUI, UAC relaunch, common controls, and DWM integration. Battery
-control itself is performed through the Lenovo kernel device handle.
+These imports implement process startup, registry access, Service Control
+Manager access, the console adapter, the Win32 GUI, UAC relaunch, common
+controls, and DWM integration. Battery control itself is performed through the
+Lenovo kernel device handle.
 
 ## Building
 
@@ -280,6 +295,35 @@ lbm/
   embedded controller still decides the physical charging transition.
 - Removing or replacing the Lenovo PM driver makes the immediate-apply path
   unavailable.
+
+## Changelog
+
+### On-demand start of the `IBMPMDRV` driver service
+
+Threshold writes used to succeed only while the Lenovo PM driver service was
+already running, which in practice meant the service had to be set to
+`Automatic`. On a machine where it sat on `Manual`, had been stopped, or had
+been switched off entirely, the `IBMPmDrv` device could not be opened and the
+write failed with nothing but a privileges message to go on.
+
+LBM now brings the service up by itself. When the device handle cannot be
+opened, it connects to the Service Control Manager, opens `IBMPMDRV`, and starts
+it. If that start is refused because the service is `Disabled`, LBM sets the
+start type back to `SERVICE_DEMAND_START` and starts it again, then retries the
+device handle. The whole path is `OpenSCManagerW`, `OpenServiceW`,
+`StartServiceW`, `ChangeServiceConfigW`, and `CloseServiceHandle`, called
+directly from assembly, so the binary still imports nothing beyond Windows
+system libraries.
+
+The service start type is therefore no longer part of the requirements. The
+driver package still is.
+
+### Clearer failure messages
+
+The CLI and the GUI previously blamed every failed write on missing
+Administrator privileges. Both now name the other thing that can be missing, the
+Lenovo PM driver, and the read path reports a missing `PWRMGRV` configuration as
+its own case instead of folding it into the same message.
 
 ## License
 
