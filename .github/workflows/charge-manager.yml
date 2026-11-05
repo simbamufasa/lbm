@@ -1,0 +1,30 @@
+name: Charge Manager Windows build
+on:
+  push:
+    branches: [main, feat/charge-manager-tray]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build LBM
+        shell: pwsh
+        run: ./build.ps1
+      - name: Build tray app
+        shell: pwsh
+        run: dotnet publish ./app/ChargeManager/ChargeManager.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o ./dist/ChargeManager
+      - name: Bundle LBM with tray app
+        shell: pwsh
+        run: Copy-Item ./bin/lbm.exe ./dist/ChargeManager/lbm.exe
+      - name: Upload prototype artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChargeManager-win-x64-prototype
+          path: dist/ChargeManager/
+          if-no-files-found: error
