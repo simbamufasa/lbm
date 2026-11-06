@@ -8,15 +8,14 @@
 
 $ErrorActionPreference = "Stop"
 
-$vsPath = "C:\Program Files\Microsoft Visual Studio\18\Enterprise"
-if (-not (Test-Path $vsPath)) {
-    $vsPath = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise"
-}
-if (-not (Test-Path $vsPath)) {
-    $vsPath = "C:\Program Files\Microsoft Visual Studio\2022\Community"
-}
+# Detect all Visual Studio editions, including standalone Build Tools.
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+if (-not (Test-Path $vswhere)) { throw "vswhere.exe not found: install Visual Studio Build Tools." }
+$vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+if (-not $vsPath) { throw "No Visual Studio installation with MSVC C++ tools was found." }
 
-$msvcBase = Get-ChildItem -Path "$vsPath\VC\Tools\MSVC" | Sort-Object Name -Descending | Select-Object -First 1
+$msvcBase = Get-ChildItem -Path "$vsPath\VC\Tools\MSVC" -Directory | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+if (-not $msvcBase) { throw "MSVC installation directory missing in $vsPath" }
 $sdkBase  = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" | Where-Object { $_.Name -like "10.*" } | Sort-Object Name -Descending | Select-Object -First 1
 
 $ml64Exe = "$($msvcBase.FullName)\bin\Hostx64\x64\ml64.exe"
