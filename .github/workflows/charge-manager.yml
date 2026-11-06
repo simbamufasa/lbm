@@ -22,6 +22,17 @@ jobs:
       - name: Bundle LBM with tray app
         shell: pwsh
         run: Copy-Item ./bin/lbm.exe ./dist/ChargeManager/lbm.exe
+      - name: Verify packaged executables
+        shell: pwsh
+        run: |
+          $package = './dist/ChargeManager'
+          foreach ($file in @('ChargeManager.exe', 'lbm.exe')) {
+            $full = Join-Path $package $file
+            if (-not (Test-Path $full -PathType Leaf)) { throw "Missing packaged executable: $full" }
+            $item = Get-Item $full
+            if ($item.Length -lt 1024) { throw "Packaged executable unexpectedly small: $full" }
+            Write-Host "$file : $($item.Length) bytes"
+          }
       - name: Upload prototype artifact
         uses: actions/upload-artifact@v4
         with:
