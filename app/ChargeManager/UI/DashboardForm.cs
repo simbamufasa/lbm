@@ -82,7 +82,7 @@ public sealed class DashboardForm : Form
         {
             _limits.Text = "LBM unavailable";
             _message.ForeColor = Color.FromArgb(245, 155, 155);
-            _message.Text = e.Message;
+            ShowFailure("Unable to read charging thresholds", e);
         }
     }
 
@@ -110,13 +110,20 @@ public sealed class DashboardForm : Form
         catch (Exception e)
         {
             _message.ForeColor = Color.FromArgb(245, 155, 155);
-            _message.Text = e.Message;
+            ShowFailure("Unable to apply charging profile", e);
         }
         finally
         {
             _busy = false;
             foreach (var button in _buttons) button.Enabled = true;
         }
+    }
+
+    private void ShowFailure(string title, Exception e)
+    {
+        _message.ForeColor = Color.FromArgb(245, 155, 155);
+        _message.Text = title + ". See details.";
+        MessageBox.Show(this, e.Message, title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
 
     private Button ModeButton(string name, int x, int y, Func<ChargeProfile> profile)
