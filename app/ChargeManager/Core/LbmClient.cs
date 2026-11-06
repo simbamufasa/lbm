@@ -103,7 +103,7 @@ public sealed class LbmClient
                 _ => "Windows could not start the LBM executable."
             };
             throw new InvalidOperationException(
-                $"{explanation}\\nPath: {ExecutablePath}\\nWindows error {ex.NativeErrorCode}: {ex.Message}", ex);
+                $"{explanation}\nPath: {ExecutablePath}\nWindows error {ex.NativeErrorCode}: {ex.Message}", ex);
         }
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         deadline.CancelAfter(timeout);
