@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.ComponentModel;
 using System.Text.RegularExpressions;
 
 namespace ChargeManager.Core;
@@ -87,7 +88,23 @@ public sealed class LbmClient
             RedirectStandardError = true
         };
         using var process = new Process { StartInfo = start };
-        if (!process.Start()) throw new InvalidOperationException("Unable to launch LBM.");
+        try
+        {
+            if (!process.Start()) throw new InvalidOperationException("LBM did not start.");
+        }
+        catch (Win32Exception ex)
+        {
+            string explanation = ex.NativeErrorCode switch
+            {
+                2 or 3 => "LBM was not found at the expected path.",
+                5 => "Windows denied access to LBM. Check Windows Security > Protection history for a quarantine or block.",
+                193 or 216 => "Windows rejected this LBM executable as incompatible or invalid.",
+                740 => "Windows requires elevation to start LBM.",
+                _ => "Windows could not start the LBM executable."
+            };
+            throw new InvalidOperationException(
+                $"{explanation}\\nPath: {ExecutablePath}\\nWindows error {ex.NativeErrorCode}: {ex.Message}", ex);
+        }
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         deadline.CancelAfter(timeout);
         var stdout = process.StandardOutput.ReadToEndAsync(deadline.Token);
